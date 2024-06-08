@@ -3,15 +3,18 @@ precision highp float;
 out vec4 o_color;
 uniform highp float time;
 
-#define  Max 10
-#define Threshold 0.0000001
+#define Max 10
+#define Threshold 0.001
 #define ColorTreshold 0.003921
+#define MINIMUM_HIT_DISTANCE 0.001
 
 struct surface
 {
   vec4 Ka;
   vec4 Kd;
   vec4 KsPh;
+  vec4 KrRefractionCoef;
+  vec4 KtDecay;
 };
 
 struct Sphere_data
@@ -24,6 +27,7 @@ struct DataRes
 {
   float d;
   surface Surf;
+  int mod;
 };
 
 uniform BaseData
@@ -37,7 +41,16 @@ uniform BaseData
     vec4 TimeGlobalDeltaGlobalDeltaLocal;
     vec4 Flag12FrameW;
     vec4 Flag34FrameH;
+    vec4 AmbientColor;
+    vec4 BackgroundColor;
+    vec4 RefractionCoefDecayMaxRecLevel;
 }; 
+
+float checkers( in vec3 p )
+{
+  ivec2 ip = ivec2(round(p + 0.5).xz);
+  return float((ip.x ^ ip.y) & 1);
+}
 
 uniform Sphere
 {
@@ -51,6 +64,8 @@ surface mix(surface a, surface b, float t)
     S.Ka = mix(a.Ka, b.Ka, t);
     S.Kd = mix(a.Kd, b.Kd, t);
     S.KsPh = mix(a.KsPh, b.KsPh, t);
+    S.KrRefractionCoef = mix(a.KrRefractionCoef, b.KrRefractionCoef, t);
+    S.KtDecay = mix(a.KtDecay, b.KtDecay, t); 
     return S;
 }
 
@@ -99,8 +114,11 @@ DataRes map_the_world(in vec3 p)
     Plane.Kd = vec4(0.50754,0.50754,0.50754, 1);
     Plane.KsPh.xyz = vec3(0.508273,0.508273,0.508273);
     Plane.KsPh.w = 51.2;
-    d = distance_from_plane(p, vec4(0.0, 1.0, 0.0, -10.0));
+    Plane.KrRefractionCoef = vec4(1.0, 1.0, 1.0,  3.0);
+    Plane.KtDecay = vec4(1.0, 1.0, 1.0,  0.5);
+    d = distance_from_plane(p, vec4(0.0, 1.0, 0.0, -3.0));
     R.Surf = mix(R.Surf, Plane, float(d < dist));
+    R.mod = int(mix(0.0, 1.0, float(d < dist)));
     R.d = dist = min(d, dist);
     return R;
 }
@@ -118,11 +136,114 @@ vec3 calculate_normal(in vec3 p)
     return normalize(normal);
 }
 
-vec3 ray_march(in vec3 ro, in vec3 rd)
+float shadow( in vec3 ro, in vec3 rd, float mint, float maxt, float k )
+{
+    float res = 1.0;
+    float t = mint;
+    for( int i = 0; i < 300 && t < maxt; i++ )
+    {
+        float h = map_the_world(ro + rd*t).d;
+        if( h < 0.001 )
+            return 0.0;
+        res = min( res, k * h / t);
+        t += h;
+    }
+    return res;
+}
+
+vec3 Shade( in vec3 rd, float k, vec3 current_position, DataRes res, float weight )
+{
+  vec3 color = res.Surf.Ka.xyz;
+  vec3 normal = calculate_normal(current_position);
+  vec3 light_position = vec3(50.0, 100.0, 10.0);
+  vec3 L = normalize(light_position - current_position);
+  normal = faceforward(normal, rd, normal);
+
+  float sh = shadow(current_position, L,  MINIMUM_HIT_DISTANCE * 10.0, length(light_position - current_position), k);
+                       
+  vec3 R = rd - normal * (2.0 * dot(rd, normal));
+  float nl = dot(normal, L); 
+  float rl = dot(R, L);
+                        
+  color += mix(vec3(0.0), res.Surf.Kd.xyz * vec3(1.0, 1.0, 1.0) * nl, float(nl > Threshold)) * sh * weight;
+
+  if (rl > Threshold)
+    color += res.Surf.KsPh.xyz * pow(rl, res.Surf.KsPh.w) * vec3(1.0, 1.0, 1.0) * sh * weight; 
+                       
+  return color * mix(1.0, checkers(current_position), float(res.mod));
+}
+
+
+vec3 Ref(in vec3 ro, in vec3 rd, float mint, float maxt, float k, vec3 weight)
+{
+    vec3 color = vec3(0);
+    vec3 Origin = ro;
+    vec3 Dir = rd;
+    vec3 w = weight; 
+    vec3 Kt0 = vec3(1.0);
+    for (int j = 0; j < int(RefractionCoefDecayMaxRecLevel.z); j++)
+    {
+        float t = mint;
+        float  total_distance_traveled = mint;
+        DataRes res;
+        for (int i = 0; i < 300; ++i)
+        {
+            vec3 current_position = Origin + total_distance_traveled * Dir;
+
+            res = map_the_world(current_position);
+
+            if (res.d < MINIMUM_HIT_DISTANCE) 
+            {                           
+                vec3 color1 = res.Surf.Ka.xyz * AmbientColor.xyz;
+                vec3 normal = calculate_normal(current_position);
+                vec3 light_position = vec3(50.0, 100.0, 10.0);
+                vec3 L = normalize(light_position - current_position);
+                normal = faceforward(normal, rd, normal);
+
+                float sh = shadow(current_position, L,  MINIMUM_HIT_DISTANCE * 10.0, length(light_position - current_position), k);
+                                    
+                vec3 R = rd - normal * (2.0 * dot(rd, normal));
+                float nl = dot(normal, L); 
+                float rl = dot(R, L);
+                                        
+                color1 += mix(vec3(0.0), res.Surf.Kd.xyz * vec3(1.0, 1.0, 1.0) * nl, float(nl > Threshold)) * sh * w;
+
+                if (rl > Threshold)
+                    color1 += res.Surf.KsPh.xyz * pow(rl, res.Surf.KsPh.w) * vec3(1.0, 1.0, 1.0) * sh * w; 
+                                    
+                
+                color1 *= mix(1.0, checkers(current_position), float(res.mod));
+
+                color += color1 * Kt0;
+                vec3 w1 = res.Surf.KrRefractionCoef.xyz * w;
+                if (max(max(w1.x, w1.y), w1.z) < Threshold)
+                   return color;
+                Kt0 *= res.Surf.KsPh.xyz * w * vec3(exp(-w1.x * 0.1), exp(-w1.y * 0.1), exp(-w1.z * 0.1)) * sh;
+                w = w1;
+                Origin = current_position;
+                Dir = R;
+                break;
+            }
+
+            if (total_distance_traveled > maxt)
+            {
+                color += BackgroundColor.xyz * Kt0; 
+                return color;
+            }
+            total_distance_traveled += res.d;
+        }
+
+    }
+    return color;
+}
+
+vec4 ray_march(in vec3 ro, in vec3 rd)
 {
     float total_distance_traveled = 0.0;
-    const int NUMBER_OF_STEPS = 200;
-    const float MINIMUM_HIT_DISTANCE = 0.001;
+    const int NUMBER_OF_STEPS = 300;
+    float Weight = 1.0;
+    float Kt = 1.0;
+
     const float MAXIMUM_TRACE_DISTANCE = 1000.0;
     DataRes res;
 
@@ -134,21 +255,27 @@ vec3 ray_march(in vec3 ro, in vec3 rd)
 
         if (res.d < MINIMUM_HIT_DISTANCE) 
         {   
-            vec3 color = res.Surf.Ka.xyz;
+            vec3 color = res.Surf.Ka.xyz * AmbientColor.xyz;
             vec3 normal = calculate_normal(current_position);
-            vec3 light_position = vec3(10.0, 1000.0, 10.0);
+            vec3 light_position = vec3(50.0, 100.0, 10.0);
             vec3 L = normalize(light_position - current_position);
-            vec3 V = normalize(current_position - CamLoc.xyz);
-            normal = faceforward(normal, V, normal);
-            
-            vec3 R = V - normal * (2.0 * dot(V, normal));
+            normal = faceforward(normal, rd, normal);
+
+            float sh = shadow(current_position, L,  MINIMUM_HIT_DISTANCE * 10.0, length(light_position - current_position), 8.0);
+                        
+            vec3 R = rd - normal * (2.0 * dot(rd, normal));
             float nl = dot(normal, L); 
             float rl = dot(R, L);
+                        
+            color += mix(vec3(0.0), res.Surf.Kd.xyz * vec3(1.0, 1.0, 1.0) * nl, float(nl > Threshold)) * sh;
 
-            color += mix(vec3(0), res.Surf.Kd.xyz * vec3(1, 1, 1) * nl + mix(vec3(0), res.Surf.KsPh.xyz * pow(rl, res.Surf.KsPh.w) * vec3(1, 1, 1) * nl,
-             float(rl > Threshold)), float(nl > Threshold));
-            
-            return color;
+            if (rl > Threshold)
+              color +=  res.Surf.KsPh.xyz * pow(rl, res.Surf.KsPh.w) * vec3(1.0, 1.0, 1.0) * sh;
+
+            vec3 w = res.Surf.KrRefractionCoef.xyz;  
+            if (max(max(w.x, w.y), w.z) > Threshold)
+                color += res.Surf.KsPh.xyz * Ref(current_position, R, Threshold, MAXIMUM_TRACE_DISTANCE, 8.0, w) * vec3(exp(-w.x * RefractionCoefDecayMaxRecLevel.y), exp(-w.y * RefractionCoefDecayMaxRecLevel.y), exp(-w.z * RefractionCoefDecayMaxRecLevel.y)) * sh;             
+            return vec4(color * mix(1.0, checkers(current_position), float(res.mod)), 1.0);
         }
 
         if (total_distance_traveled > MAXIMUM_TRACE_DISTANCE)
@@ -157,7 +284,7 @@ vec3 ray_march(in vec3 ro, in vec3 rd)
         }
         total_distance_traveled += res.d;
     }
-    return vec3(0.28, 0.47, 0.8);
+    return vec4(BackgroundColor.xyz, 0.0);
 }
 
 void main()
@@ -178,7 +305,7 @@ void main()
     vec3 ro = CamLoc.xyz + X;
     vec3 rd = normalize(X);
 
-    vec3 shaded_color = ray_march(ro, rd);
+    vec3 shaded_color = ray_march(ro, rd * cos(dot(rd, CamDir.xyz))).xyz;
 
     o_color = vec4(shaded_color, 1.0);
 }

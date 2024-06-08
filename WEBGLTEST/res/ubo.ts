@@ -11,6 +11,11 @@ export class Ubo_Matr {
   TimeGlobalDeltaGlobalDeltaLocal: _vec3;
   flags12FrameW: _vec3;
   flags45FrameH: _vec3;
+  AmbientColor: _vec3;
+  BackgroundColor: _vec3;
+  RefractionCoef: number;
+  Decay: number;
+  MaxRecLevel: number;
   constructor(
     CamLoc: _vec3,
     CamAt: _vec3,
@@ -20,7 +25,12 @@ export class Ubo_Matr {
     ProjDistFarTimeLocal: _vec3,
     TimeGlobalDeltaGlobalDeltaLocal: _vec3,
     flags12FrameW: _vec3,
-    flags45FrameH: _vec3
+    flags45FrameH: _vec3,
+    AmbientColor: _vec3,
+    BackgroundColor: _vec3,
+    RefractionCoef: number,
+    Decay: number,
+    MaxRecLevel: number
   ) {
     this.CamLoc = CamLoc;
     this.CamAt = CamAt;
@@ -32,6 +42,11 @@ export class Ubo_Matr {
     this.TimeGlobalDeltaGlobalDeltaLocal = TimeGlobalDeltaGlobalDeltaLocal;
     this.flags12FrameW = flags12FrameW;
     this.flags45FrameH = flags45FrameH;
+    this.AmbientColor = AmbientColor;
+    this.BackgroundColor = BackgroundColor;
+    this.RefractionCoef = RefractionCoef;
+    this.Decay = Decay;
+    this.MaxRecLevel = MaxRecLevel;
   }
   GetArray() {
     return new Float32Array([
@@ -52,6 +67,14 @@ export class Ubo_Matr {
       ..._vec3.vec3(this.flags12FrameW),
       1,
       ..._vec3.vec3(this.flags45FrameH),
+      1,
+      ..._vec3.vec3(this.AmbientColor),
+      1,
+      ..._vec3.vec3(this.BackgroundColor),
+      1,
+      this.RefractionCoef,
+      this.Decay,
+      this.MaxRecLevel,
       1
     ]);
   }

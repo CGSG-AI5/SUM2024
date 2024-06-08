@@ -12,7 +12,7 @@ import { Spheres, GetArraySpheres } from "./objects";
 let gl: WebGL2RenderingContext;
 
 let Ubo_set1: UBO;
-let Ubo_set1_data: Ubo_Matr;
+export let Ubo_set1_data: Ubo_Matr;
 let Ubo_set2: UBO;
 
 let FlagDataObjectUpdate: boolean = true;
@@ -124,13 +124,11 @@ async function reloadShaders(): Promise<ProgramInfo | null> {
   const dtResponse = await fetch(
     "./data.txt" + "?nocache" + new Date().getTime()
   );
-  if (FlagDataObjectUpdate) {
-    const dtText = await dtResponse.text();
-    parser(dtText);
-    FlagDataObjectUpdate = false;
-    console.log(Spheres);
-    Ubo_set2.update(GetArraySpheres(), gl);
-  }
+  const dtText = await dtResponse.text();
+  parser(dtText);
+  FlagDataObjectUpdate = false;
+  console.log(Spheres);
+  Ubo_set2.update(GetArraySpheres(), gl);
   const shaderProgram = initShaderProgram(vsText, fsText);
   if (!shaderProgram) return null;
 
@@ -333,16 +331,23 @@ export async function main(w: number, h: number) {
     new _vec3(0, 0, 0),
     new _vec3(0, 0, 0),
     new _vec3(0, 0, 0),
-    new _vec3(0, 0, 0)
+    new _vec3(0, 0, 0),
+    new _vec3(0, 0, 0),
+    new _vec3(0, 0, 0),
+    0,
+    0,
+    0
   );
   Ubo_set1 = UBO.create(Ubo_set1_data.GetArray().length, "BaseData", gl);
-  Ubo_set2 = UBO.create(16 * 10 + 4, "Sphere", gl);
+  Ubo_set2 = UBO.create(24 * 10 + 4, "Sphere", gl);
   initCam();
   gl.viewport(0, 0, w, h);
   resizeCam(w, h);
-
+  let programInf: ProgramInfo | null;
+  programInf = programInfo;
+  programInf = await reloadShaders();
   const render = async () => {
-    let programInf = await reloadShaders();
+    if (myInput.KeysClick[82]) programInf = await reloadShaders();
     myTimer.Response();
     window.addEventListener("mousedown", (e) => {
       e.preventDefault();
@@ -381,7 +386,6 @@ export async function main(w: number, h: number) {
     });
 
     myInput.response(Md, MouseClick, Wheel, Keys);
-    if (myInput.KeysClick[82]) FlagDataObjectUpdate = true;
 
     Md[0] = Md[1] = 0;
     renderCam();

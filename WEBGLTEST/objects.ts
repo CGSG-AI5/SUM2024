@@ -5,6 +5,10 @@ class surface {
   Kd: _vec3 = _vec3.set(0, 0, 0);
   Ks: _vec3 = _vec3.set(0, 0, 0);
   Ph: number = 0;
+  Kr: _vec3 = _vec3.set(0, 0, 0);
+  Kt: _vec3 = _vec3.set(0, 0, 0);
+  RefractionCoef: number = 0;
+  Decay: number = 0;
   GetArray() {
     return [
       ..._vec3.vec3(this.Ka),
@@ -12,7 +16,11 @@ class surface {
       ..._vec3.vec3(this.Kd),
       1,
       ..._vec3.vec3(this.Ks),
-      this.Ph
+      this.Ph,
+      ..._vec3.vec3(this.Kr),
+      this.RefractionCoef,
+      ..._vec3.vec3(this.Kt),
+      this.Decay
     ];
   }
 }
