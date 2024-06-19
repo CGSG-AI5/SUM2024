@@ -7,13 +7,22 @@ import { _vec3 } from "./math/mathvec3";
 
 import { cam, CamSet } from "./math/mathcam";
 import { _matr4 } from "./math/mathmat4";
-import { Spheres, GetArraySpheres } from "./objects";
+import {
+  Shapes,
+  GetArrayObjects,
+  Surfaces,
+  GetArraySurfaces,
+  surface
+} from "./objects";
 
 let gl: WebGL2RenderingContext;
+let FpsCnvas: CanvasRenderingContext2D;
 
 let Ubo_set1: UBO;
 export let Ubo_set1_data: Ubo_Matr;
 let Ubo_set2: UBO;
+let Ubo_set3: UBO;
+let max_size = 10;
 
 let FlagDataObjectUpdate: boolean = true;
 
@@ -25,7 +34,7 @@ interface ProgramInfo {
 }
 
 function initCam() {
-  CamSet(_vec3.set(0, 0, -5), _vec3.set(0, 0, 0), _vec3.set(0, 1, 0));
+  CamSet(_vec3.set(-2, 6, -6), _vec3.set(0, 0, 0), _vec3.set(0, 1, 0));
   Ubo_set1_data.ProjDistFarTimeLocal.x = cam.ProjDist;
 }
 
@@ -34,65 +43,58 @@ function renderCam() {
   let cosT, sinT, cosP, sinP, plen, Azimuth, Elevator;
   let Wp, Hp, sx, sy;
   let dv;
-  if (myInput.Keys[18]) {
-    Wp = Hp = cam.ProjSize;
-    cosT = (cam.Loc.y - cam.At.y) / Dist;
-    sinT = Math.sqrt(1 - cosT * cosT);
 
-    plen = Dist * sinT;
-    cosP = (cam.Loc.z - cam.At.z) / plen;
-    sinP = (cam.Loc.x - cam.At.x) / plen;
+  Wp = Hp = cam.ProjSize;
+  cosT = (cam.Loc.y - cam.At.y) / Dist;
+  sinT = Math.sqrt(1 - cosT * cosT);
 
-    Azimuth = (Math.atan2(sinP, cosP) / Math.PI) * 180;
-    Elevator = (Math.atan2(sinT, cosT) / Math.PI) * 180;
+  plen = Dist * sinT;
+  cosP = (cam.Loc.z - cam.At.z) / plen;
+  sinP = (cam.Loc.x - cam.At.x) / plen;
 
-    let key = "AD";
+  Azimuth = (Math.atan2(sinP, cosP) / Math.PI) * 180;
+  Elevator = (Math.atan2(sinT, cosT) / Math.PI) * 180;
 
-    Azimuth +=
-      myTimer.globalDeltaTime *
-      3 *
-      (-30 * myInput.MouseClickLeft * myInput.Mdx);
-    Elevator +=
-      myTimer.globalDeltaTime *
-      2 *
-      (-30 * myInput.MouseClickLeft * myInput.Mdy);
+  let key = "AD";
 
-    if (Elevator < 0.08) Elevator = 0.08;
-    else if (Elevator > 178.9) Elevator = 178.9;
+  Azimuth +=
+    myTimer.globalDeltaTime * 3 * (-30 * myInput.MouseClickLeft * myInput.Mdx);
+  Elevator +=
+    myTimer.globalDeltaTime * 2 * (-30 * myInput.MouseClickLeft * myInput.Mdy);
 
-    // if (Azimuth < -45) Azimuth = -45;
-    // else if (Azimuth > 45) Azimuth = 45;
+  if (Elevator < 0.08) Elevator = 0.08;
+  else if (Elevator > 178.9) Elevator = 178.9;
 
-    Dist +=
-      myTimer.globalDeltaTime *
-      (1 + myInput.Keys[16] * 27) *
-      (1.2 * myInput.Mdz);
-    if (Dist < 0.1) Dist = 0.1;
-    // console.log(key.charCodeAt(0));
-    if (myInput.MouseClickRight) {
-      if (cam.FrameW > cam.FrameH) Wp *= cam.FrameW / cam.FrameH;
-      else Hp *= cam.FrameH / cam.FrameW;
+  // if (Azimuth < -45) Azimuth = -45;
+  // else if (Azimuth > 45) Azimuth = 45;
 
-      sx = (((-myInput.Mdx * Wp * 10) / cam.FrameW) * Dist) / cam.ProjDist;
-      sy = (((myInput.Mdy * Hp * 10) / cam.FrameH) * Dist) / cam.ProjDist;
+  Dist +=
+    myTimer.globalDeltaTime * (1 + myInput.Keys[16] * 27) * (1.2 * myInput.Mdz);
+  if (Dist < 0.1) Dist = 0.1;
+  // console.log(key.charCodeAt(0));
+  if (myInput.MouseClickRight) {
+    if (cam.FrameW > cam.FrameH) Wp *= cam.FrameW / cam.FrameH;
+    else Hp *= cam.FrameH / cam.FrameW;
 
-      dv = _vec3.add(_vec3.mulnum(cam.Right, sx), _vec3.mulnum(cam.Up, sy));
+    sx = (((-myInput.Mdx * Wp * 10) / cam.FrameW) * Dist) / cam.ProjDist;
+    sy = (((myInput.Mdy * Hp * 10) / cam.FrameH) * Dist) / cam.ProjDist;
 
-      cam.At = _vec3.add(cam.At, dv);
-      cam.Loc = _vec3.add(cam.Loc, dv);
-    }
-    CamSet(
-      _matr4.point_transform(
-        new _vec3(0, Dist, 0),
-        _matr4.mulmatr(
-          _matr4.mulmatr(_matr4.rotateX(Elevator), _matr4.rotateY(Azimuth)),
-          _matr4.translate(cam.At)
-        )
-      ),
-      cam.At,
-      new _vec3(0, 1, 0)
-    );
+    dv = _vec3.add(_vec3.mulnum(cam.Right, sx), _vec3.mulnum(cam.Up, sy));
+
+    cam.At = _vec3.add(cam.At, dv);
+    cam.Loc = _vec3.add(cam.Loc, dv);
   }
+  CamSet(
+    _matr4.point_transform(
+      new _vec3(0, Dist, 0),
+      _matr4.mulmatr(
+        _matr4.mulmatr(_matr4.rotateX(Elevator), _matr4.rotateY(Azimuth)),
+        _matr4.translate(cam.At)
+      )
+    ),
+    cam.At,
+    new _vec3(0, 1, 0)
+  );
 
   Ubo_set1_data.CamLoc = cam.Loc;
   Ubo_set1_data.CamAt = cam.At;
@@ -102,6 +104,12 @@ function renderCam() {
 
   //   if (Ani->Keys[VK_SHIFT] && Ani->KeysClick['P'])
   //     Ani->IsPause = !Ani->IsPause;
+}
+
+function drawFps() {
+  FpsCnvas.clearRect(0, 0, FpsCnvas.canvas.width, FpsCnvas.canvas.height);
+  FpsCnvas.font = "48px serif";
+  FpsCnvas.fillText("FPS:" + myTimer.FPS.toFixed(2), 10, 50);
 }
 
 function resizeCam(w: number, h: number) {
@@ -126,9 +134,11 @@ async function reloadShaders(): Promise<ProgramInfo | null> {
   );
   const dtText = await dtResponse.text();
   parser(dtText);
-  FlagDataObjectUpdate = false;
-  console.log(Spheres);
-  Ubo_set2.update(GetArraySpheres(), gl);
+  console.log(Shapes);
+  console.log(Surfaces);
+  Ubo_set2.update(GetArrayObjects(), gl);
+  Ubo_set3.update(GetArraySurfaces(), gl);
+
   const shaderProgram = initShaderProgram(vsText, fsText);
   if (!shaderProgram) return null;
 
@@ -268,6 +278,7 @@ function drawScene(
   gl.useProgram(programInfo.program);
   Ubo_set1.apply(0, programInfo.program, gl);
   Ubo_set2.apply(1, programInfo.program, gl);
+  Ubo_set3.apply(2, programInfo.program, gl);
   const offset = 0;
   const vertexCount = 4;
   gl.drawArrays(gl.TRIANGLE_STRIP, offset, vertexCount);
@@ -290,10 +301,12 @@ export async function main(w: number, h: number) {
   console.log(fsText);
 
   const canvas = document.querySelector("#glcanvas") as HTMLCanvasElement;
-  if (!canvas) {
+  const canvas1 = document.querySelector("#fpscanvas") as HTMLCanvasElement;
+  if (!canvas || !canvas1) {
     return;
-  }
-  // Initialize the GL context
+  } // Initialize the GL context
+
+  FpsCnvas = canvas1.getContext("2d") as CanvasRenderingContext2D;
   gl = canvas.getContext("webgl2") as WebGL2RenderingContext;
   gl.canvas.width = w;
   gl.canvas.height = h;
@@ -338,8 +351,10 @@ export async function main(w: number, h: number) {
     0,
     0
   );
+  Surfaces.push(new surface());
   Ubo_set1 = UBO.create(Ubo_set1_data.GetArray().length, "BaseData", gl);
-  Ubo_set2 = UBO.create(24 * 10 + 4, "Sphere", gl);
+  Ubo_set2 = UBO.create(36 * max_size + 4, "Primitives", gl);
+  Ubo_set3 = UBO.create(20 * max_size + 4, "PrimitivesSurfaces", gl);
   initCam();
   gl.viewport(0, 0, w, h);
   resizeCam(w, h);
@@ -349,6 +364,8 @@ export async function main(w: number, h: number) {
   const render = async () => {
     if (myInput.KeysClick[82]) programInf = await reloadShaders();
     myTimer.Response();
+    drawFps();
+
     window.addEventListener("mousedown", (e) => {
       e.preventDefault();
       if (e.button == 0) {
@@ -394,7 +411,6 @@ export async function main(w: number, h: number) {
     drawScene(programInf, buffers, Uni);
     Wheel = 0;
     Keys.fill(0);
-    console.log(myTimer.FPS);
     window.requestAnimationFrame(render);
   };
   render();
@@ -411,6 +427,8 @@ window.addEventListener("resize", (event) => {
   let h: number = window.innerHeight;
   gl.canvas.width = w;
   gl.canvas.height = h;
+  FpsCnvas.canvas.width = w;
+  FpsCnvas.canvas.height = h;
   gl.viewport(0, 0, w, h);
   resizeCam(w, h);
 });

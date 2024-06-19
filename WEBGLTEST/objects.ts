@@ -1,10 +1,13 @@
 import { _vec3 } from "./math/mathvec3";
+import { _matr4 } from "./math/mathmat4";
 
-class surface {
-  Ka: _vec3 = _vec3.set(0, 0, 0);
-  Kd: _vec3 = _vec3.set(0, 0, 0);
-  Ks: _vec3 = _vec3.set(0, 0, 0);
-  Ph: number = 0;
+
+export class surface {
+  Name: string = "Default";
+  Ka: _vec3 = _vec3.set(0.1, 0.1, 0.1);
+  Kd: _vec3 = _vec3.set(0.9, 0.9, 0.9);
+  Ks: _vec3 = _vec3.set(0.3, 0.3, 0.3);
+  Ph: number = 30;
   Kr: _vec3 = _vec3.set(0, 0, 0);
   Kt: _vec3 = _vec3.set(0, 0, 0);
   RefractionCoef: number = 0;
@@ -25,21 +28,31 @@ class surface {
   }
 }
 
-export class sphere {
-  Name: string = "";
-  R: number = 0;
-  P: _vec3 = _vec3.set(0, 0, 0);
-  Surf: surface = new surface();
+export class shape {
+  Obj: number[][] = _matr4.identity(); 
+  Matrix: number[][] = _matr4.identity();
+  TypeShape: number = 0;
+  Material: number = 0; 
   GetArray() {
-    return [..._vec3.vec3(this.P), this.R].concat(this.Surf.GetArray());
+    return [..._matr4.toarr(this.Obj), ..._matr4.toarr(this.Matrix), this.TypeShape, this.Material, 0, 0];
   }
 }
 
-export let Spheres: sphere[] = [];
+export let Shapes: shape[] = [];
+export let Surfaces: surface[] = [];
 
-export function GetArraySpheres() {
-  let Result = [Spheres.length, 0, 0, 0];
-  for (let element of Spheres) {
+
+export function GetArrayObjects() {
+  let Result = [Shapes.length, 0, 0, 0];
+  for (let element of Shapes) {
+    Result = Result.concat(element.GetArray());
+  }
+  return new Float32Array(Result);
+}
+
+export function GetArraySurfaces() {
+  let Result = [Surfaces.length, 0, 0, 0];
+  for (let element of Surfaces) {
     Result = Result.concat(element.GetArray());
   }
   return new Float32Array(Result);

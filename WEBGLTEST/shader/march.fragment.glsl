@@ -8,6 +8,15 @@ uniform highp float time;
 #define ColorTreshold 0.003921
 #define MINIMUM_HIT_DISTANCE 0.001
 
+#define Sphere 0
+#define Cube 1
+#define RoundCube 2
+#define Torus 3
+#define Cylinder 4
+#define Cone 5
+#define Plane 6
+
+
 struct surface
 {
   vec4 Ka;
@@ -17,10 +26,11 @@ struct surface
   vec4 KtDecay;
 };
 
-struct Sphere_data
+struct Shape_data
 {
-  vec4 PosR;
-  surface Surf;
+  mat4 Obj;
+  mat4 Matr;
+  vec4 TypeSurface;
 };
 
 struct DataRes
@@ -46,17 +56,25 @@ uniform BaseData
     vec4 RefractionCoefDecayMaxRecLevel;
 }; 
 
+uniform Primitives
+{
+    vec4 SizePrimitives;
+    Shape_data Shapes[Max];
+}; 
+
+uniform PrimitivesSurfaces
+{
+    vec4 SizePrimitivesSurfaces;
+    surface Surfaces[Max];
+}; 
+
 float checkers( in vec3 p )
 {
   ivec2 ip = ivec2(round(p + 0.5).xz);
   return float((ip.x ^ ip.y) & 1);
 }
 
-uniform Sphere
-{
-    vec4 Size;
-    Sphere_data Shapes[Max];
-}; 
+
 
 surface mix(surface a, surface b, float t)
 {
@@ -75,9 +93,44 @@ vec3 Clamp( vec3 a )
 }
 
 
-float distance_from_sphere(in vec3 p, in vec3 c, float r )
+float distance_from_sphere(in vec3 p, in mat4 m, float r )
 {
-    return length(p - c) - r;
+    vec3 q = (m * vec4(p, 1.0)).xyz;
+    return length(q) - r;
+}
+
+
+
+float distance_from_box( in vec3 p, in mat4 m, in vec3 b )
+{
+  vec3 q = (m * vec4(p, 1.0)).xyz;
+  return length(max(abs(q) - b, 0.0));
+}
+
+float distance_from_round_box( in vec3 p, in mat4 m, in vec3 b, float r )
+{
+  vec3 q = (m * vec4(p, 1.0)).xyz;
+  return length(max(abs(q) - b, 0.0)) - r;
+}
+
+float distance_from_torus( vec3 p, in mat4 m, vec2 t )
+{
+  vec3 q = (m * vec4(p, 1.0)).xyz;
+  vec2 a = vec2(length(q.xz) - t.x, q.y);
+  return length(a) - t.y;
+}
+
+float distance_from_cone( vec3 p, in mat4 m, vec2 c )
+{
+  vec3 q = (m * vec4(p, 1.0)).xyz;
+  float t = length(q.xy);
+  return dot(c,vec2(t,q.z));
+}
+
+float plane( vec3 p, in mat4 m, vec4 n )
+{
+  vec3 q = (m * vec4(p, 1.0)).xyz;
+  return dot(q, n.xyz) + n.w;
 }
 
 float distance_from_plane(in vec3 p, in vec4 n)
@@ -85,15 +138,18 @@ float distance_from_plane(in vec3 p, in vec4 n)
     return abs(dot(p, n.xyz) - n.w);
 }
 
-float distance_from_box( vec3 p, vec3 b )
+float distance_from_cylinder( vec3 p, vec3 c )
 {
- return length(max(abs(p - vec3(0, -4, 4)) - b, 0.0));
+ return length(p.xz - c.xy) - c.z;
 }
 
-float distance_from_round_box( vec3 p, vec3 b, float r )
+
+float opRep( vec3 p, vec3 c, in vec3 c1, float r )
 {
- return length(max(abs(p) - b, 0.0)) - r;
+  vec3 q = mod(p, c) - 0.5 * c;
+  return 0.0;
 }
+
 
 
 
@@ -101,23 +157,27 @@ DataRes map_the_world(in vec3 p)
 {
     float dist = 9999.0, d;
     DataRes R;
-    surface Plane;
+    surface Plane1;
     vec4 color;
-    for(int i; i < int(Size.x); i++)
+    for(int i; i < int(SizePrimitives.x); i++)
     {
-      d = distance_from_sphere(p, Shapes[i].PosR.xyz, Shapes[i].PosR.w);
-      R.Surf = mix(R.Surf, Shapes[i].Surf, float(d < dist));
+      //d = distance_from_sphere(p, Shapes[i].Matr, Shapes[i].Obj[0][0]);
+      d = mix(d, distance_from_sphere(p, Shapes[i].Matr, Shapes[i].Obj[0][0]), float(Shapes[i].TypeSurface.x == 0.0));
+      //d = mix(d, distance_from_box(p, Shapes[i].Matr, vec3(Shapes[i].Obj[0][0], Shapes[i].Obj[0][1], Shapes[i].Obj[0][2])), float(Shapes[i].TypeSurface.x == 1.0));
+      //d = mix(d, distance_from_round_box(p, Shapes[i].Matr, vec3(Shapes[i].Obj[0][0], Shapes[i].Obj[0][1], Shapes[i].Obj[0][2]), Shapes[i].Obj[0][3]), float(Shapes[i].TypeSurface.x == 2.0));
+      //d = mix(d, distance_from_torus(p, Shapes[i].Matr, vec2(Shapes[i].Obj[0][0], Shapes[i].Obj[0][1])), float(Shapes[i].TypeSurface.x == 3.0));
+      R.Surf = mix(R.Surf, Surfaces[int(Shapes[i].TypeSurface.y)], float(d < dist));
       R.d = dist = min(d, dist);
     }
 
-    Plane.Ka = vec4(0.19225,0.19225,0.19225, 1);
-    Plane.Kd = vec4(0.50754,0.50754,0.50754, 1);
-    Plane.KsPh.xyz = vec3(0.508273,0.508273,0.508273);
-    Plane.KsPh.w = 51.2;
-    Plane.KrRefractionCoef = vec4(1.0, 1.0, 1.0,  3.0);
-    Plane.KtDecay = vec4(1.0, 1.0, 1.0,  0.5);
+    Plane1.Ka = vec4(0.19225,0.19225,0.19225, 1);
+    Plane1.Kd = vec4(0.50754,0.50754,0.50754, 1);
+    Plane1.KsPh.xyz = vec3(0.508273,0.508273,0.508273);
+    Plane1.KsPh.w = 51.2;
+    Plane1.KrRefractionCoef = vec4(1.0, 1.0, 1.0,  3.0);
+    Plane1.KtDecay = vec4(1.0, 1.0, 1.0,  0.5);
     d = distance_from_plane(p, vec4(0.0, 1.0, 0.0, -3.0));
-    R.Surf = mix(R.Surf, Plane, float(d < dist));
+    R.Surf = mix(R.Surf, Plane1, float(d < dist));
     R.mod = int(mix(0.0, 1.0, float(d < dist)));
     R.d = dist = min(d, dist);
     return R;
@@ -143,8 +203,8 @@ float shadow( in vec3 ro, in vec3 rd, float mint, float maxt, float k )
     for( int i = 0; i < 300 && t < maxt; i++ )
     {
         float h = map_the_world(ro + rd*t).d;
-        if( h < 0.001 )
-            return 0.0;
+        if(h < 0.001)
+          return 0.0;
         res = min( res, k * h / t);
         t += h;
     }
@@ -269,8 +329,10 @@ vec4 ray_march(in vec3 ro, in vec3 rd)
                         
             color += mix(vec3(0.0), res.Surf.Kd.xyz * vec3(1.0, 1.0, 1.0) * nl, float(nl > Threshold)) * sh;
 
+            vec3 a = res.Surf.KsPh.xyz * pow(rl, res.Surf.KsPh.w) * vec3(1.0, 1.0, 1.0) * sh;
+            //color += a * float(rl > Threshold);
             if (rl > Threshold)
-              color +=  res.Surf.KsPh.xyz * pow(rl, res.Surf.KsPh.w) * vec3(1.0, 1.0, 1.0) * sh;
+              color += a;
 
             vec3 w = res.Surf.KrRefractionCoef.xyz;  
             if (max(max(w.x, w.y), w.z) > Threshold)
@@ -305,7 +367,7 @@ void main()
     vec3 ro = CamLoc.xyz + X;
     vec3 rd = normalize(X);
 
-    vec3 shaded_color = ray_march(ro, rd * cos(dot(rd, CamDir.xyz))).xyz;
+    vec3 shaded_color = ray_march(ro,   rd * cos(dot(rd, CamDir.xyz))).xyz;
 
     o_color = vec4(shaded_color, 1.0);
 }

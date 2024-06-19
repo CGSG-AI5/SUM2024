@@ -1,7 +1,8 @@
 import { _vec3 } from "../math/mathvec3";
-import { Spheres, sphere } from "../objects";
+import { Shapes, Surfaces, shape, surface } from "../objects";
 
 import { Ubo_set1_data } from "../main";
+import { _matr4 } from "../math/mathmat4";
 
 function ReadVec3fromString(Str: string) {
   let h: number[];
@@ -16,16 +17,16 @@ function ReadVec3fromString(Str: string) {
 }
 
 export function parser(Txt: string) {
-  Spheres.length = 0;
+  Shapes.length = 0;
+  Surfaces.length = 1;
   let Name: string;
   let arrayOfStrings = Txt.split("\n");
   for (let i = 0; i < arrayOfStrings.length; i++) {
     if (arrayOfStrings[i][0] == "/" && arrayOfStrings[i][1] == "/") continue;
     let words = arrayOfStrings[i].split(" ");
-    Name = words[0];
     if (words.length == 1) continue;
-    let Type = words[1];
-    if (Name == "scene") {
+    let Type = words[0];
+    if (Type == "scene") {
       if (words.length != 6) continue;
       let x: _vec3 | null;
       x = ReadVec3fromString(words[1]);
@@ -39,44 +40,136 @@ export function parser(Txt: string) {
       Ubo_set1_data.RefractionCoef = Number(words[3]);
       Ubo_set1_data.Decay = Number(words[4]);
       Ubo_set1_data.MaxRecLevel = Number(words[5]);
-    }
-    if (Type == "sphere") {
+    } else if (Type == "surface") {
+      if (words.length != 10) continue;
       let x: _vec3 | null;
-      if (words.length != 12) continue;
+      let Surf = new surface();
+      Surf.Name = words[1];
 
-      let Sph = new sphere();
-      Sph.Name = Name;
+      let flag = false;
+      for (let element of Surfaces) {
+        if (element.Name == Surf.Name) {
+          flag = true;
+          break;
+        }
+      }
+      if (flag) continue;
 
       x = ReadVec3fromString(words[2]);
       if (x == null) continue;
-      else Sph.P = x;
-      Sph.R = Number(words[3]);
+      Surf.Ka = x;
+
+      x = ReadVec3fromString(words[3]);
+      if (x == null) continue;
+      Surf.Kd = x;
 
       x = ReadVec3fromString(words[4]);
       if (x == null) continue;
-      else Sph.Surf.Ka = x;
+      Surf.Ks = x;
 
-      x = ReadVec3fromString(words[5]);
-      if (x == null) continue;
-      else Sph.Surf.Kd = x;
+      Surf.Ph = Number(words[5]);
 
       x = ReadVec3fromString(words[6]);
       if (x == null) continue;
-      else Sph.Surf.Ks = x;
+      Surf.Kr = x;
 
-      Sph.Surf.Ph = Number(words[7]);
-
-      x = ReadVec3fromString(words[8]);
+      x = ReadVec3fromString(words[7]);
       if (x == null) continue;
-      else Sph.Surf.Kr = x;
+      Surf.Kt = x;
 
-      x = ReadVec3fromString(words[9]);
-      if (x == null) continue;
-      else Sph.Surf.Kt = x;
+      Surf.RefractionCoef = Number(words[8]);
+      Surf.Decay = Number(words[9]);
 
-      Sph.Surf.RefractionCoef = Number(words[10]);
-      Sph.Surf.Decay = Number(words[11]);
-      Spheres.push(Sph);
+      Surfaces.push(Surf);
+    } else {
+      let id = -1;
+      let x: _vec3 | null;
+      let Sph = new shape();
+
+      if (Type == "sphere") {
+        if (words.length != 6) continue;
+        Sph.Obj[0][0] = Number(words[1]);
+        Sph.TypeShape = 0;
+        id = 2;
+      }
+      if (Type == "box") {
+        if (words.length != 6) continue;
+        x = ReadVec3fromString(words[1]);
+        if (x == null) continue;
+
+        Sph.Obj[0][0] = x.x;
+        Sph.Obj[0][1] = x.y;
+        Sph.Obj[0][2] = x.z;
+
+        Sph.TypeShape = 1;
+        id = 2;
+      }
+      if (Type == "round_box") {
+        if (words.length != 7) continue;
+        x = ReadVec3fromString(words[1]);
+        if (x == null) continue;
+
+        Sph.Obj[0][0] = x.x;
+        Sph.Obj[0][1] = x.y;
+        Sph.Obj[0][2] = x.z;
+        Sph.Obj[0][3] = Number(words[2]);
+
+        Sph.TypeShape = 2;
+        id = 3;
+      }
+      if (Type == "torus") {
+        if (words.length != 7) continue;
+        Sph.Obj[0][0] = Number(words[1]);
+        Sph.Obj[0][1] = Number(words[2]);
+
+        Sph.TypeShape = 3;
+        id = 3;
+      }
+      if (Type == "cylinder") {
+        if (words.length != 6) continue;
+        x = ReadVec3fromString(words[1]);
+        if (x == null) continue;
+
+        Sph.Obj[0][0] = x.x;
+        Sph.Obj[0][1] = x.y;
+        Sph.Obj[0][2] = x.z;
+
+        Sph.TypeShape = 4;
+        id = 2;
+      }
+      if (id != -1) {
+        let Scale: number[][];
+        let Rot: number[][];
+        let Trans: number[][];
+
+        x = ReadVec3fromString(words[id]);
+        if (x == null) continue;
+        Trans = _matr4.translate(x);
+
+        x = ReadVec3fromString(words[id + 1]);
+        if (x == null) continue;
+        Rot = _matr4.mulmatr(
+          _matr4.mulmatr(_matr4.rotateY(x.x), _matr4.rotateY(x.y)),
+          _matr4.rotateZ(x.z)
+        );
+
+        x = ReadVec3fromString(words[id + 2]);
+        if (x == null) continue;
+        Scale = _matr4.scale(x);
+
+        Sph.Matrix = _matr4.inverse(
+          _matr4.mulmatr(_matr4.mulmatr(Scale, Rot), Trans)
+        );
+
+        let index = 0;
+        for (let element of Surfaces) {
+          if (words[id + 3] == element.Name) {
+            Sph.Material = index;
+          }
+          index++;
+        }
+        Shapes.push(Sph);
+      }
     }
   }
 }
