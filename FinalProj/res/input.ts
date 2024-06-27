@@ -18,7 +18,13 @@ class InPut {
     this.MouseClickRight = MouseClick[1];
   }
 
-  response(M: number[], MouseClick: number[], Wheel: number, Keys: number[]) {
+  response(
+    M: number[],
+    Md: number[],
+    MouseClick: number[],
+    Wheel: number,
+    Keys: number[]
+  ) {
     // if (Keys[17] != 0)
 
     for (let i = 0; i < 256; i++) {
@@ -28,8 +34,11 @@ class InPut {
       this.Keys[i] = Keys[i];
     }
 
-    this.Mdx = M[0];
-    this.Mdy = M[1];
+    this.Mdx = Md[0];
+    this.Mdy = Md[1];
+
+    this.Mx = M[0];
+    this.My = M[1];
 
     // this.Mx = M[0];
     // this.My = M[1];
