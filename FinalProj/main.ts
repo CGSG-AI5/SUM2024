@@ -2,7 +2,7 @@ import { myInput } from "./res/input";
 import { myTimer } from "./res/timer";
 
 let MapCnvs: CanvasRenderingContext2D;
-let TitelsCnvs: CanvasRenderingContext2D;
+let TilesCnvs: CanvasRenderingContext2D;
 let CountImageLoad = 0;
 
 let DrawGrid = false;
@@ -83,7 +83,7 @@ class titel {
 }
 
 let Cam = new camera();
-let titels = new Map<number, titel>();
+let tiles = new Map<number, titel>();
 //new Image(SizeImage, SizeImage);
 
 function mod(a: number, b: number) {
@@ -147,9 +147,7 @@ function LoadMap() {
         Cam.y + MapCnvs.canvas.height / 2 < y * SizeImage
       )
         continue;
-      let v: undefined | titel = titels.get(
-        (Math.pow(4, Cam.zoom) - 1) / 3 + i
-      );
+      let v: undefined | titel = tiles.get((Math.pow(4, Cam.zoom) - 1) / 3 + i);
       if (v != undefined) {
         v.IsVisible = true;
         CountImageLoad++;
@@ -161,7 +159,7 @@ function LoadMap() {
         v.img = im;
         v.x = x;
         v.y = y;
-        titels.set((Math.pow(4, Cam.zoom) - 1) / 3 + i, v);
+        tiles.set((Math.pow(4, Cam.zoom) - 1) / 3 + i, v);
       }
     }
   } else {
@@ -186,7 +184,7 @@ function LoadMap() {
       for (let i = X0; i < X1; i++) {
         let x = mod(i, Math.pow(2, Cam.zoom)),
           y = mod(j, Math.pow(2, Cam.zoom));
-        let v: undefined | titel = titels.get(
+        let v: undefined | titel = tiles.get(
           (Math.pow(4, Cam.zoom) - 1) / 3 + x + y * Math.pow(2, Cam.zoom)
         );
         if (v != undefined) {
@@ -200,7 +198,7 @@ function LoadMap() {
           v.img = im;
           v.x = x;
           v.y = y;
-          titels.set(
+          tiles.set(
             (Math.pow(4, Cam.zoom) - 1) / 3 + x + y * Math.pow(2, Cam.zoom),
             v
           );
@@ -208,8 +206,8 @@ function LoadMap() {
       }
   }
 
-  for (const [key, value] of titels) {
-    if (!value.IsVisible) titels.delete(key);
+  for (const [key, value] of tiles) {
+    if (!value.IsVisible) tiles.delete(key);
     else value.IsVisible = false;
   }
 }
@@ -230,43 +228,41 @@ export async function main(w: number, h: number) {
   MapCnvs.canvas.width = w;
   MapCnvs.canvas.height = h;
 
-  const canvas = document.querySelector(
-    "#numtitelscanvas"
-  ) as HTMLCanvasElement;
+  const canvas = document.querySelector("#numtilescanvas") as HTMLCanvasElement;
   if (!canvas) {
     return;
   }
 
-  TitelsCnvs = canvas.getContext("2d") as CanvasRenderingContext2D;
+  TilesCnvs = canvas.getContext("2d") as CanvasRenderingContext2D;
 
-  TitelsCnvs.canvas.width = w;
-  TitelsCnvs.canvas.height = h;
+  TilesCnvs.canvas.width = w;
+  TilesCnvs.canvas.height = h;
   const render = async () => {
     myTimer.Response();
     if (Cam.IsUpdate) {
       LoadMap();
     }
-    if (CountImageLoad == titels.size) {
+    if (CountImageLoad == tiles.size) {
       MapCnvs.clearRect(0, 0, MapCnvs.canvas.width, MapCnvs.canvas.height);
-      TitelsCnvs.clearRect(
+      TilesCnvs.clearRect(
         0,
         0,
-        TitelsCnvs.canvas.width,
-        TitelsCnvs.canvas.height
+        TilesCnvs.canvas.width,
+        TilesCnvs.canvas.height
       );
       MapCnvs.font = "20px serif";
-      TitelsCnvs.font = "48px serif";
+      TilesCnvs.font = "48px serif";
 
       if (DrawFPS) {
-        TitelsCnvs.fillText("Titels:" + titels.size, 10, 50);
-        TitelsCnvs.fillText("FPS:" + myTimer.FPS.toFixed(2), 10, 100);
+        TilesCnvs.fillText("Tiles:" + tiles.size, 10, 50);
+        TilesCnvs.fillText("FPS:" + myTimer.FPS.toFixed(2), 10, 100);
       }
-      for (const [key, value] of titels) {
+      for (const [key, value] of tiles) {
         value.drawMap();
       }
       CountImageLoad = 0;
     }
-    if (CountImageLoad > titels.size) {
+    if (CountImageLoad > tiles.size) {
       CountImageLoad = 0;
       LoadMap();
     }
@@ -332,8 +328,8 @@ window.addEventListener("resize", (event) => {
   MapCnvs.canvas.width = w;
   MapCnvs.canvas.height = h;
 
-  TitelsCnvs.canvas.width = w;
-  TitelsCnvs.canvas.height = h;
+  TilesCnvs.canvas.width = w;
+  TilesCnvs.canvas.height = h;
   // for (let i = 0; i < Math.pow(2, Cam.zoom); i++) {
   //   img.src = `https://a.tile.openstreetmap.org/${Cam.zoom}/${i % 2}/${Math.floor(i / 2)}.png`;
   //   img.onload = () => drawMap1(i % 2, Math.floor(i / 2));
